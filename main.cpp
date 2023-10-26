@@ -2,8 +2,8 @@
 #include <ImfArray.h>
 #include <ImfInputFile.h>
 #include <iostream>
-#include <eigen3/Eigen/Core>
 #include <chrono>
+#include <array>
 
 constexpr size_t output_width = 256;
 constexpr size_t output_height = 128;
@@ -11,59 +11,62 @@ constexpr float N1 = 100;
 constexpr float N2 = 100;
 constexpr float thetaStep = 1.0 / N1;
 constexpr float phiStep = 1.0 / N2;
+ 
 
-using Eigen::Vector2f;
-using Eigen::Vector3f;
-
-
-Vector3f sphericalToCartesian(float theta, float phi)
+std::array<float,3> sphericalToCartesian(float theta, float phi)
 {
     auto sin_theta = sin(theta);
     auto cos_theta = cos(theta);
     auto sin_phi = sin(phi);
     auto cos_phi = cos(phi);
-    return Vector3f(
+    return {
         sin_theta * cos_phi,
         sin_theta * sin_phi,
-        cos_theta);
+        cos_theta
+    };
 }
 
-Vector2f cartesianToSpherical(const Vector3f& v)
+std::array<float,2> cartesianToSpherical(const std::array<float,3>& v)
 {
-    Vector2f result(
-        std::acos(v.z()),
-        std::atan2(v.y(), v.x()));
-    if (result.y() < 0)
-        result.y() += 2 * M_PI;
+    std::array<float,2> result{
+        std::acos(v[2]),
+        std::atan2(v[2], v[0])
+    };
+    if (result[2] < 0)
+        result[2] += 2 * M_PI;
     return result;
 }
 
-Vector2f uvToSpherical(float u, float v)
+std::array<float,2> uvToSpherical(float u, float v)
 {
-    auto phi = u * 2.0 * M_PI;
-    auto theta = v * M_PI;
-    return Vector2f(theta, phi);
+    float phi = u * 2.0 * M_PI;
+    float theta = v * M_PI;
+    return std::array<float,2>{theta, phi};
 }
 
-Vector2f sphericalToUV(float theta, float phi)
+std::array<float,2> sphericalToUV(float theta, float phi)
 {
-    auto u = phi * M_2_PI;
-    auto v = theta * M_1_PI;
-    return Vector2f(u, v);
+    float u = phi * M_2_PI;
+    float v = theta * M_1_PI;
+    return std::array<float,2>{u, v};
 }
 
-Vector2f cartesianToUV(const Vector3f& v)
+std::array<float,2> cartesianToUV(const std::array<float,3>& v)
 {
     auto sph = cartesianToSpherical(v);
     return sphericalToUV(sph[0], sph[1]);
 }
 
-Vector3f uvToCartesian(float u, float v)
+std::array<float,3> uvToCartesian(float u, float v)
 {
     auto sph = uvToSpherical(u, v);
     return sphericalToCartesian(sph[0], sph[1]);
 }
 
+float dotProduct(std::array<float,3> a, std::array<float,3> b)
+{
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
 
 void read(std::string fileName, Imf::Array2D<Imf::Rgba> &pixels, size_t &width, size_t &height)
 {
@@ -84,7 +87,7 @@ void process(Imf::Array2D<Imf::Rgba> &input_pixels, Imf::Array2D<Imf::Rgba>& out
     std::array<std::array<float, output_width>, output_height> G{};
     std::array<std::array<float, output_width>, output_height> B{};
 
-    std::array<std::array<Vector3f, output_width>, output_height> output_dir_table{};
+    std::array<std::array<std::array<float,3>, output_width>, output_height> output_dir_table{};
     for (size_t output_row = 0; output_row < output_pixels.height(); output_row++)
     {
         for (size_t output_col = 0; output_col < output_pixels.width(); output_col++)
@@ -107,46 +110,30 @@ void process(Imf::Array2D<Imf::Rgba> &input_pixels, Imf::Array2D<Imf::Rgba>& out
             auto u = phiIdx / N2;
             auto v = thetaIdx / N1;
             auto dir = uvToCartesian(u, v);
-            // auto uv = sphericalToUV(theta, phi);
-            // auto dir = sphericalToCartesian(theta, phi);
-            // auto u = uv[0];
-            // auto v = uv[1];
+     
             float row_f = v * (input_pixels.height()-1);
             float col_f = u * (input_pixels.width()-1);
             size_t row = row_f;
             size_t col = col_f;
 
-            // lerp or closet neighbor???
-            auto color0 = input_pixels[row][col];
-            // auto color1 = input_pixels[row][col+1];
-            // auto color2 = input_pixels[row+1][col];
-            // auto color3 = input_pixels[row+1][col+1];
+            // TODO: Lerp or nearest neighbor ???
+            auto intensity = input_pixels[row][col];
             auto sin_theta = sin(theta);
-            auto cos_theta = cos(theta);
-            double factor = sin_theta  * pdfSample;
-            auto r = color0.r;
-            auto g = color0.g;
-            auto b = color0.b;
-
-            // auto r = 0.25 * (color0.r + color1.r + color2.r + color3.r);
-            // auto g = 0.25 * (color0.g + color1.g + color2.g + color3.g);
-            // auto b = 0.25 * (color0.b + color1.b + color2.b + color3.b);
-            // double factor = pdfSample;
-            // double factor = sin_theta ;
-            // auto factor = sin_theta * cos_theta * pdfSample;
-            // auto intensity = Imf::Rgba(color.r * sin_theta, color.g * sin_theta,color.b * sin_theta,1);
-            // auto intensity = Imf::Rgba(color.r * factor, color.g * factor,color.b * factor,1);
+            auto factor = sin_theta * pdfSample;
+            auto r = intensity.r;
+            auto g = intensity.g;
+            auto b = intensity.b;
 
             for (size_t output_row = 0; output_row < output_pixels.height(); output_row++)
             {
                 for (size_t output_col = 0; output_col < output_pixels.width(); output_col++)
                 {
-                    auto _cos = output_dir_table[output_row][output_col].dot(dir);
-                    if (_cos > 0)
+                    auto cos_diff = dotProduct(output_dir_table[output_row][output_col], dir);
+                    if (cos_diff > 0)
                     {
-                        R[output_row][output_col] += std::max(0.0, r * factor*_cos);
-                        G[output_row][output_col] += std::max(0.0, g * factor*_cos);
-                        B[output_row][output_col] += std::max(0.0, b * factor*_cos);
+                        R[output_row][output_col] += std::max(0.0, r * factor*cos_diff);
+                        G[output_row][output_col] += std::max(0.0, g * factor*cos_diff);
+                        B[output_row][output_col] += std::max(0.0, b * factor*cos_diff);
                     }
                 }
             }
@@ -185,13 +172,13 @@ int main()
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
 
-    // read("/Users/lkj/Git/CG/HDR/uffizi-large.exr", pixels, input_width, input_height);
-    read("/Users/lkj/Git/CG/HDR/pisa.exr", pixels, input_width, input_height);
+    read("/Users/lkj/Git/CG/HDR/uffizi-large.exr", pixels, input_width, input_height);
+    // read("/Users/lkj/Git/CG/HDR/pisa.exr", pixels, input_width, input_height);
 
     Imf::Array2D<Imf::Rgba> output_pixels(output_height,output_width);
     process(pixels, output_pixels);
-    // write(output_pixels, "meow.exr");
-    write(output_pixels, "meow2.exr");
+    write(output_pixels, "diffuse_uffizi.exr");
+    // write(output_pixels, "diffuse_pisa.exr");
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
