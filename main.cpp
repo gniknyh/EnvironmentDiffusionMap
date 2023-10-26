@@ -87,6 +87,7 @@ void process(Imf::Array2D<Imf::Rgba> &input_pixels, Imf::Array2D<Imf::Rgba>& out
     std::array<std::array<float, output_width>, output_height> G{};
     std::array<std::array<float, output_width>, output_height> B{};
 
+    // cache all pixel of output image cartesian coordinate.
     std::array<std::array<std::array<float,3>, output_width>, output_height> output_dir_table{};
     for (size_t output_row = 0; output_row < output_pixels.height(); output_row++)
     {
