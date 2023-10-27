@@ -63,7 +63,7 @@ std::array<float,3> uvToCartesian(float u, float v)
     return sphericalToCartesian(sph[0], sph[1]);
 }
 
-float dotProduct(std::array<float,3> a, std::array<float,3> b)
+float dotProduct(const std::array<float,3>& a, const std::array<float,3>& b)
 {
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
